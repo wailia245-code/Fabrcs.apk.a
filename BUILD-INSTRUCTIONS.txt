@@ -1,0 +1,8 @@
+Fabrics v17.7.7 — COMPLETE SOURCE + ANDROID BUILD PROJECT
+Source of truth: app/src/main/assets/v17.7.7-PRODUCTION-FINAL.html
+Package: com.fabrics.app | Version: 17.7.7 | Code: 1777 | Release
+AGP 8.2.2 | Kotlin 1.9.22 | SDK 34 | Java 17 | Gradle 8.2.1
+CI: .github/workflows/release.yml
+The CI workflow builds the current source and verifies package/version/signature, then uploads Fabrics-v17.7.7-FINAL.apk and SHA-256.
+No old APK is included or used. This archive is source/build files, not an APK.
+The Gradle wrapper JAR is not included because the current execution environment cannot download it; CI uses gradle/actions/setup-gradle and therefore does not require the wrapper JAR.
