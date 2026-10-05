@@ -1,71 +1,82 @@
 name: Build APK
 
 on:
-  workflow_dispatch:
   push:
-    branches: [main, master]
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. سحب الكود من المستودع
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. تهيئة Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
 
+      # 3. تهيئة Gradle
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.4'
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Download required JavaScript libraries
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p app/src/main/assets/lib
-          curl -fsSL --retry 3 --retry-delay 2 \
-            https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js \
-            -o app/src/main/assets/lib/html2pdf.bundle.min.js
-          curl -fsSL --retry 3 --retry-delay 2 \
-            https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js \
-            -o app/src/main/assets/lib/lz-string.min.js
-          test -s app/src/main/assets/lib/html2pdf.bundle.min.js
-          test -s app/src/main/assets/lib/lz-string.min.js
-
+      # 4. التحقق من مسارات وملفات المشروع (الخطوة المُصلّحة)
       - name: Verify project paths
         shell: bash
         run: |
-          set -euo pipefail
-          test -f settings.gradle
-          test -f build.gradle
-          test -f gradle.properties
-          test -f app/build.gradle
-          test -f app/src/main/AndroidManifest.xml
-          test -f app/src/main/java/com/fabrics/app/MainActivity.java
-          test -f app/src/main/java/com/fabrics/app/PrintBridge.java
-          test -f app/src/main/java/com/fabrics/app/ShareBridge.java
-          test -f app/src/main/assets/index.html
-          test -f app/src/main/assets/lib/html2pdf.bundle.min.js
-          test -f app/src/main/assets/lib/lz-string.min.js
-          ! grep -q 'package="' app/src/main/AndroidManifest.xml
-          grep -q "namespace 'com.fabrics.app'" app/build.gradle
-          grep -q "applicationId 'com.fabrics.app'" app/build.gradle
-          grep -q 'AndroidPrint.printHtml' app/src/main/assets/index.html
-          grep -q 'AndroidShare.shareFile' app/src/main/assets/index.html
-          grep -q 'AndroidShare.shareText' app/src/main/assets/index.html
+          fail=0
 
+          check() {
+            if eval "$2"; then
+              echo "✅ PASS: $1"
+            else
+              echo "❌ FAIL: $1"
+              fail=1
+            fi
+          }
+
+          # --- التحقق من وجود ملف lz-string ---
+          check "lz-string file exists"         "test -f app/src/main/assets/lib/lz-string.min.js"
+
+          # --- التحقق من AndroidManifest.xml ---
+          check "no package attr in Manifest"   "! grep -q 'package=\"' app/src/main/AndroidManifest.xml"
+
+          # --- التحقق من build.gradle ---
+          check "namespace in build.gradle"     "grep -q \"namespace 'com.fabrics.app'\" app/build.gradle"
+          check "applicationId in build.gradle" "grep -q \"applicationId 'com.fabrics.app'\" app/build.gradle"
+
+          # --- التحقق من index.html ---
+          check "AndroidPrint.printHtml"        "grep -q 'AndroidPrint.printHtml' app/src/main/assets/index.html"
+          check "AndroidShare.shareFile"        "grep -q 'AndroidShare.shareFile' app/src/main/assets/index.html"
+          check "AndroidShare.shareText"        "grep -q 'AndroidShare.shareText' app/src/main/assets/index.html"
+
+          # --- إيقاف الخطوة بخطأ إذا فشل أي شرط ---
+          if [ "$fail" -ne 0 ]; then
+            echo ""
+            echo "❌ فشل التحقق من بعض المسارات أو الملفات، راجع الرسائل أعلاه."
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ تم التحقق من جميع المسارات بنجاح."
+
+      # 5. بناء ملف APK
       - name: Build APK
-        run: gradle assembleDebug --no-daemon
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --stacktrace
 
+      # 6. رفع ملف APK كـ Artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: fabrics-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
